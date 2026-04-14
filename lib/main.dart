@@ -48,14 +48,15 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
           children: [
             // Top Status Area
             Padding(
-              padding: const EdgeInsets.only(top: 40, left: 20, right: 20),
+              padding: const EdgeInsets.only(top: 22, left: 20, right: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('9:41', style: TextStyle(color: Colors.white)),
                   Row(
                     children: [
-                      const Icon(Icons.circle_notifications_outlined, color: Colors.white),
+                      // const Icon(Icons.circle_notifications_outlined, color: Colors.white),
+                      const Text('Noti_Icon'),
                       const SizedBox(width: 8),
                       const Text('...', style: TextStyle(color: Colors.white)),
                     ],
@@ -68,20 +69,20 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.location_on, color: Colors.tealAccent, size: 28),
-                  const SizedBox(width: 10),
+                  // const Icon(Icons.location_on, color: Colors.tealAccent, size: 28),
+                  // const SizedBox(width: 10),
                   Text('MockUp', style: Theme.of(context).textTheme.headlineSmall),
                   const Spacer(),
                   // Online Pill
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.teal.withOpacity(0.2),
+                      color: Colors.teal.withValues(alpha: 0.2), // Supuestamente lo mismo que opacity: 0.2
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.circle, color: Colors.tealAccent, size: 10),
+                        // const Icon(Icons.circle, color: Colors.tealAccent, size: 10),
                         const SizedBox(width: 5),
                         const Text('En línea',
                             style: TextStyle(color: Colors.tealAccent, fontSize: 12)),
@@ -115,14 +116,14 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.2),
+                    color: Colors.green.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check, color: Colors.greenAccent, size: 12),
+                      // const Icon(Icons.check, color: Colors.greenAccent, size: 12),
                       const SizedBox(width: 5),
-                      const Text('✓ Normal',
+                      const Text('Normal',
                           style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
                     ],
                   ),
@@ -138,7 +139,7 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 15,
               crossAxisSpacing: 15,
-              childAspectRatio: 1.4,
+              childAspectRatio: 1.8,
               children: [
                 _buildSummaryCard(
                   context: context,
@@ -174,38 +175,46 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 15),
 
-            // Chart area (Mock using Container/Painter or image placeholder)
             Container(
               height: 200,
-              padding: const EdgeInsets.all(15),
+              padding: EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: const Color(0xFF141A33),
-                borderRadius: BorderRadius.circular(15),
+                color: const Color(0xFF131A33),
+                borderRadius: BorderRadius.circular(15)
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Stylized line chart path (mock)
-                  Expanded(
-                    child: CustomPaint(
-                      painter: ChartPainter(),
-                    ),
-                  ),
-                  // X-axis labels
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('00:00',
-                          style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-                      const Text('12:00',
-                          style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-                      const Text('23:59',
-                          style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            )
+            // Chart area (Mock using Container/Painter or image placeholder)
+            // Container(
+            //   height: 200,
+            //   padding: const EdgeInsets.all(15),
+            //   decoration: BoxDecoration(
+            //     color: const Color(0xFF141A33),
+            //     borderRadius: BorderRadius.circular(15),
+            //   ),
+            //   child: Column(
+            //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //     children: [
+            //       // Stylized line chart path (mock)
+            //       Expanded(
+            //         child: CustomPaint(
+            //           painter: ChartPainter(),
+            //         ),
+            //       ),
+            //       // X-axis labels
+            //       Row(
+            //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //         children: [
+            //           const Text('00:00',
+            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
+            //           const Text('12:00',
+            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
+            //           const Text('23:59',
+            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
+            //         ],
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -253,7 +262,7 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
 
   Widget _buildSummaryCard({
     required BuildContext context,
-    required Widget icon,
+    Widget? icon, // Og required Widget icon
     required String value,
     required String label,
     Color valueColor = Colors.tealAccent,
@@ -270,7 +279,8 @@ class _GasHomeScreenState extends State<GasHomeScreen> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [icon, const Icon(Icons.star_border, color: Colors.blueAccent, size: 16)],
+            // children: [icon, const Icon(Icons.star_border, color: Colors.blueAccent, size: 16)],
+            children: [],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
