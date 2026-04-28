@@ -59,6 +59,8 @@ class _GeneralScreenState extends State<GeneralScreen> {
     final service = context.watch<WebSocketService>();
     final readings = service.readingsAll;
 
+    print('Lecturas Obtenidas en General: ${(readings.isEmpty) ? 'No ha completado la promesa' : readings.last.timestamp}\nError?: ${_error}');
+
     double? maxVal, minVal, avgVal;
     int totalReadings = readings.length;
 

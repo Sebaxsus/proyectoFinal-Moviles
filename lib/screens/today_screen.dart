@@ -30,12 +30,14 @@ class _TodayScreenState extends State<TodayScreen> {
       _isLoading = true;
       _error = null;
     });
-
+    print('Llamo loadData');
     try {
       await context.read<WebSocketService>().loadTodayData();
     } catch (e) {
+      print('LoadData Fallo ${e}');
       setState(() => _error = e.toString());
     } finally {
+      print('LoadData termino!');
       setState(() => _isLoading = false);
     }
   }
@@ -44,6 +46,7 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     final service = context.watch<WebSocketService>();
     final readings = service.readingsToday;
+    print('Lecturas Obtenidas en Today: ${readings}\nError?: ${_error}');
 
     // Calcular estadísticas del día
     double? maxVal, minVal, avgVal, lastVal;

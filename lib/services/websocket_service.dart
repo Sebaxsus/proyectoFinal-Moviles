@@ -70,7 +70,7 @@ class WebSocketService extends ChangeNotifier {
   void _onMessage(dynamic message) {
     try {
       final res = jsonDecode(message); // Parcialmente res es un tipo _JsonMap
-      print('Res Type: ${res.runtimeType}\nValidatiosn: ${res is Map}, ${res["event"] is String}, ${res['data'] is List}, ${res is Map<String, dynamic>}');
+      print('[_onMessage] Res Data: ${res['event']}');
       // El servidor envía una lista de lecturas
       if (res is Map<String, dynamic> && res['data'] is List<dynamic>) {
         final List<dynamic> data = res["data"];
@@ -127,13 +127,25 @@ class WebSocketService extends ChangeNotifier {
     _channel!.sink.add(jsonEncode(request));
 
     // Esperar la respuesta con un timeout de 10 segundos
-    return await _pendingRequest!.future.timeout(
+    final res = await _pendingRequest?.future.timeout(
       const Duration(seconds: 10),
       onTimeout: () {
-        print('Entro a timeOut objeto _pendingRequest ${_pendingRequest}');
+        print('Entro a timeOut objeto _pendingRequest ${_pendingRequest} ');
         throw TimeoutException('El servidor no respondió');
       },
     );
+
+    print('Respuesta de la peticion ${request}');
+    if (res != null) {
+      if (res.isNotEmpty) {
+        print('Respuesta: ${res.last}');
+      } else {
+        print('Respuesta Vacia: ${res}');
+      }
+    } else {
+      print('Respuesta Nula: ${res}');
+    }
+    return res!;
   }
 
   // ============================================================
