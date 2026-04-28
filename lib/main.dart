@@ -1,339 +1,201 @@
+// lib/main.dart
+// Punto de entrada de la aplicación
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'services/websocket_service.dart';
+import 'screens/today_screen.dart';
+import 'screens/month_screen.dart';
+import 'screens/general_screen.dart';
+import 'screens/safety_screen.dart';
+import 'utils/app_theme.dart';
 
 void main() {
-  runApp(const GasMonitorApp());
+  runApp(
+    // ChangeNotifierProvider hace que WebSocketService esté disponible
+    // en TODA la app sin pasar datos manualmente entre pantallas
+    ChangeNotifierProvider(
+      create: (_) => WebSocketService(),
+      child: const GasDashboardApp(),
+    ),
+  );
 }
 
-class GasMonitorApp extends StatelessWidget {
-  const GasMonitorApp({super.key});
+class GasDashboardApp extends StatelessWidget {
+  const GasDashboardApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Gas Monitor',
       debugShowCheckedModeBanner: false,
-      title: 'Mockup',
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFF0C101B), // Dark blue-black
-        primaryColor: Colors.tealAccent,
-        textTheme: ThemeData.dark().textTheme.copyWith(
-              headlineSmall: const TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-              titleLarge: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-              bodyMedium: const TextStyle(fontSize: 14, color: Colors.white70),
-              bodySmall: const TextStyle(fontSize: 12, color: Colors.blueAccent),
-            ),
-      ),
-      home: const GasHomeScreen(),
+      theme: AppTheme.darkTheme,
+      home: const HomeScreen(),
     );
   }
 }
 
-class GasHomeScreen extends StatefulWidget {
-  const GasHomeScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<GasHomeScreen> createState() => _GasHomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _GasHomeScreenState extends State<GasHomeScreen> {
-  int _selectedIndex = 0;
+class _HomeScreenState extends State<HomeScreen> {
+  // Índice de la pantalla activa en la barra de navegación
+  int _currentIndex = 0;
+
+  // Lista de todas las pantallas del dashboard
+  final List<Widget> _screens = const [
+    TodayScreen(),
+    MonthScreen(),
+    GeneralScreen(),
+    SafetyScreen(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Conectar al servidor al iniciar la app
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WebSocketService>().connect();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final service = context.watch<WebSocketService>();
+
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
-        child: Column(
+      // ---- AppBar superior ----
+      appBar: AppBar(
+        title: Row(
           children: [
-            // Top Status Area
-            Padding(
-              padding: const EdgeInsets.only(top: 22, left: 20, right: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('9:41', style: TextStyle(color: Colors.white)),
-                  Row(
-                    children: [
-                      // const Icon(Icons.circle_notifications_outlined, color: Colors.white),
-                      const Text('Noti_Icon'),
-                      const SizedBox(width: 8),
-                      const Text('...', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // App Bar Title Area
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Row(
-                children: [
-                  // const Icon(Icons.location_on, color: Colors.tealAccent, size: 28),
-                  // const SizedBox(width: 10),
-                  Text('MockUp', style: Theme.of(context).textTheme.headlineSmall),
-                  const Spacer(),
-                  // Online Pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.withValues(alpha: 0.2), // Supuestamente lo mismo que opacity: 0.2
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        // const Icon(Icons.circle, color: Colors.tealAccent, size: 10),
-                        const SizedBox(width: 5),
-                        const Text('En línea',
-                            style: TextStyle(color: Colors.tealAccent, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Resumen del Día Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Resumen del Día',
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const Text('14/04/2026', style: TextStyle(color: Colors.blueAccent, fontSize: 12)),
-                  ],
-                ),
-                // Normal Pill
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      // const Icon(Icons.check, color: Colors.greenAccent, size: 12),
-                      const SizedBox(width: 5),
-                      const Text('Normal',
-                          style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // 4 summary cards
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 15,
-              crossAxisSpacing: 15,
-              childAspectRatio: 1.8,
-              children: [
-                _buildSummaryCard(
-                  context: context,
-                  icon: const Icon(Icons.flash_on, color: Colors.tealAccent, size: 28),
-                  value: '24.50 ppm',
-                  label: 'Último Registro',
-                ),
-                _buildSummaryCard(
-                  context: context,
-                  icon: const Icon(Icons.insights, color: Colors.tealAccent, size: 28),
-                  value: '21.80 ppm',
-                  label: 'Promedio del Día',
-                ),
-                _buildSummaryCard(
-                  context: context,
-                  icon: const Icon(Icons.trending_up, color: Colors.deepOrangeAccent, size: 28),
-                  value: '38.10 ppm',
-                  label: 'Máximo del Día',
-                  valueColor: Colors.deepOrangeAccent,
-                ),
-                _buildSummaryCard(
-                  context: context,
-                  icon: const Icon(Icons.trending_down, color: Colors.tealAccent, size: 28),
-                  value: '8.30 ppm',
-                  label: 'Mínimo del Día',
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-
-            // Lecturas de Hoy Section
-            Text('Lecturas de Hoy',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 15),
-
+            // Ícono del sensor
             Container(
-              height: 200,
-              padding: EdgeInsets.all(15),
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF131A33),
-                borderRadius: BorderRadius.circular(15)
+                color: AppTheme.accent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
               ),
-            )
-            // Chart area (Mock using Container/Painter or image placeholder)
-            // Container(
-            //   height: 200,
-            //   padding: const EdgeInsets.all(15),
-            //   decoration: BoxDecoration(
-            //     color: const Color(0xFF141A33),
-            //     borderRadius: BorderRadius.circular(15),
-            //   ),
-            //   child: Column(
-            //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //     children: [
-            //       // Stylized line chart path (mock)
-            //       Expanded(
-            //         child: CustomPaint(
-            //           painter: ChartPainter(),
-            //         ),
-            //       ),
-            //       // X-axis labels
-            //       Row(
-            //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //         children: [
-            //           const Text('00:00',
-            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-            //           const Text('12:00',
-            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-            //           const Text('23:59',
-            //               style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-            //         ],
-            //       ),
-            //     ],
-            //   ),
-            // ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: const BoxDecoration(
-          color: Color(0xFF0A0F1F),
-          borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(25), topRight: Radius.circular(25)),
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          currentIndex: _selectedIndex,
-          selectedItemColor: Colors.tealAccent,
-          unselectedItemColor: Colors.blueAccent,
-          type: BottomNavigationBarType.fixed,
-          onTap: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(_selectedIndex == 0 ? Icons.home_filled : Icons.home),
-              label: 'Hoy',
+              child: const Icon(Icons.gas_meter_outlined,
+                  color: AppTheme.accent, size: 18),
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month),
-              label: 'Mes',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_outlined),
-              label: 'General',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.shield_outlined),
-              label: 'Seguridad',
+            const SizedBox(width: 10),
+            const Text(
+              'Gas Monitor',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required BuildContext context,
-    Widget? icon, // Og required Widget icon
-    required String value,
-    required String label,
-    Color valueColor = Colors.tealAccent,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141A33),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            // children: [icon, const Icon(Icons.star_border, color: Colors.blueAccent, size: 16)],
-            children: [],
+        actions: [
+          // Indicador de estado de conexión
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _buildConnectionStatus(service),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: valueColor),
-              ),
-              const SizedBox(height: 5),
-              Text(label, style: const TextStyle(color: Colors.blueAccent, fontSize: 12)),
-            ],
+        ],
+      ),
+
+      // ---- Cuerpo: pantalla activa ----
+      body: IndexedStack(
+        // IndexedStack mantiene el estado de cada pantalla al cambiar de tab
+        index: _currentIndex,
+        children: _screens,
+      ),
+
+      // ---- Barra de navegación inferior ----
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.today_outlined),
+            activeIcon: Icon(Icons.today),
+            label: 'Hoy',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month_outlined),
+            activeIcon: Icon(Icons.calendar_month),
+            label: 'Mes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart),
+            label: 'General',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shield_outlined),
+            activeIcon: Icon(Icons.shield),
+            label: 'Seguridad',
           ),
         ],
       ),
     );
   }
-}
 
-class ChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = Colors.tealAccent
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+  // Widget que muestra si la app está conectada al servidor
+  Widget _buildConnectionStatus(WebSocketService service) {
+    final isConnected = service.isConnected;
 
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.tealAccent.withOpacity(0.3), Colors.blueAccent.withOpacity(0.0)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..style = PaintingStyle.fill;
+    return GestureDetector(
+      onTap: () {
+        // Al tocar, intentar reconectar si está desconectado
+        if (!isConnected) service.connect();
 
-    final path = Path();
-    path.moveTo(0, size.height * 0.7);
-    path.lineTo(size.width * 0.1, size.height * 0.65);
-    path.lineTo(size.width * 0.2, size.height * 0.5);
-    path.lineTo(size.width * 0.3, size.height * 0.45);
-    path.cubicTo(
-        size.width * 0.4, size.height * 0.3, size.width * 0.5, size.height * 0.1, size.width * 0.6, size.height * 0.35);
-    path.cubicTo(size.width * 0.7, size.height * 0.6, size.width * 0.85,
-        size.height * 0.7, size.width, size.height * 0.7);
-
-    // Fill the path
-    canvas.drawPath(path, fillPaint);
-
-    // Draw the line
-    canvas.drawPath(path, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(service.statusMessage),
+            backgroundColor:
+                isConnected ? AppTheme.safe : AppTheme.danger,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: (isConnected ? AppTheme.safe : AppTheme.danger)
+              .withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: (isConnected ? AppTheme.safe : AppTheme.danger)
+                .withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Punto parpadeante de estado
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 500),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color:
+                    isConnected ? AppTheme.safe : AppTheme.danger,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isConnected ? 'En línea' : 'Sin conexión',
+              style: TextStyle(
+                color: isConnected ? AppTheme.safe : AppTheme.danger,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
