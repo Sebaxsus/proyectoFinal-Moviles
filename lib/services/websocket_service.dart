@@ -4,14 +4,27 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
 import '../models/sensor_reading.dart';
+import '../models/user_model.dart';
+import '../models/auth_state.dart';
 
 class WebSocketService extends ChangeNotifier {
   static const String _serverUrl = 'ws://127.0.0.1:5000';
 
+  static const String _dataUrl = '$_serverUrl';
+  static const String _authUrl = '$_serverUrl/auth';
+
   WebSocketChannel? _channel;
+  WebSocketChannel? _authChannel;
+
   bool _isConnected = false;
   String _statusMessage = 'Desconectado';
+
+  // --- Estado de Auth
+  AuthStatus _authStatus = AuthStatus.unauthenticated;
+  UserModel? _currentUser;
+  String? _authError;
 
   // Listas de datos para cada sección del dashboard
   List<SensorReading> _readingsToday = [];
@@ -20,13 +33,20 @@ class WebSocketService extends ChangeNotifier {
 
   // Completer para esperar la respuesta del servidor
   Completer<List<SensorReading>>? _pendingRequest;
+  Completer<Map<String, dynamic>>? _pendingAuthRequest;
 
   // --- Getters públicos (solo lectura desde afuera) ---
   bool get isConnected => _isConnected;
   String get statusMessage => _statusMessage;
+
   List<SensorReading> get readingsToday => _readingsToday;
   List<SensorReading> get readingsMonth => _readingsMonth;
   List<SensorReading> get readingsAll => _readingsAll;
+
+  AuthStatus get authStatus => _authStatus;
+  UserModel? get currentUser => _currentUser;
+  String? get authError => _authError;
+  bool get isAuthenticated => _authStatus == AuthStatus.authenticated;
 
   // Conectar al servidor WebSocket
   Future<void> connect() async {
@@ -36,7 +56,7 @@ class WebSocketService extends ChangeNotifier {
 
       _channel = WebSocketChannel.connect(
         // Url de conexion
-        Uri.parse(_serverUrl),
+        Uri.parse(_dataUrl),
         // Protocolos de comunicacion WS
         protocols: ["arduino"]
       );
@@ -61,15 +81,157 @@ class WebSocketService extends ChangeNotifier {
   // Desconectar del servidor
   void disconnect() {
     _channel?.sink.close();
+    _authChannel?.sink.close();
+
     _isConnected = false;
     _statusMessage = 'Desconectado';
     notifyListeners();
   }
 
+  // Inicia sesión enviando credenciales al endpoint ws://.../auth
+  /// El servidor debe responder con:
+  ///   {"event":"login","status":"ok","username":"...","token":"..."}
+  ///   {"event":"login","status":"error","message":"..."}
+  Future<void> login(String username, String password) async {
+    _authStatus = AuthStatus.loading;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      _authChannel ??= WebSocketChannel.connect(Uri.parse(_authUrl));
+      _pendingAuthRequest = Completer<Map<String, dynamic>>();
+
+      // Escuchar la respuesta de Auth
+      _authChannel!.stream.listen(
+        _onAuthMessage,
+        onError: (e) {
+          if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
+            _pendingAuthRequest!.completeError(e);
+          }
+        },
+      );
+
+      // Enviar Credenciales
+      _authChannel!.sink.add(
+        jsonEncode(
+          {
+            'event': 'login',
+            'username': username,
+            'password': password,
+          }
+        )
+      );
+
+      // Esperar Respuesta con timeout.
+      final response = await _pendingAuthRequest!.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Sin respuesta del servidor'),
+      );
+
+      if (response['status'] == 'ok') {
+        _currentUser = UserModel.fromJson(response);
+        _authStatus = AuthStatus.authenticated;
+        _authError = null;
+
+        // Una vez autenticado, conectar el canal de datos
+        await connect();
+      } else {
+        _authStatus = AuthStatus.error;
+        _authError = response['message'] as String? ?? 'Credencianles incorrectas';
+      }
+
+    } catch (e) {
+      _authStatus = AuthStatus.error;
+      _authError = e.toString();
+    }
+
+    _pendingAuthRequest = null;
+    notifyListeners();
+
+  }
+
+  /// Registra un nuevo usuario enviando credenciales al endpoint /auth
+  /// {"event":"register","username":"...","password":"..."}
+  Future<void> register(String username, String password) async {
+    _authStatus = AuthStatus.loading;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      _authChannel ??= WebSocketChannel.connect(Uri.parse(_authUrl));
+      _pendingAuthRequest = Completer<Map<String, dynamic>>();
+
+      _authChannel!.stream.listen(
+        _onAuthMessage,
+        onError: (e) {
+          if (_pendingAuthRequest != null && _pendingAuthRequest!.isCompleted) {
+            _pendingAuthRequest!.completeError(e);
+          }
+        },
+      );
+
+      _authChannel!.sink.add(
+        jsonEncode(
+          {
+            'event': 'register',
+            'username': username,
+            'password': password,
+          }
+        )
+      );
+
+      final response = await _pendingAuthRequest!.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Sin respuesta del servidor'),
+      );
+
+      if (response['status'] == 'ok') {
+        await login(username, password);
+        return;
+      } else {
+        _authStatus = AuthStatus.error;
+        _authError = response['message'] as String? ?? 'Error al registrar usuario';
+      }
+    } catch (e) {
+      _authStatus = AuthStatus.error;
+      _authError = e.toString();
+    }
+
+    _pendingAuthRequest = null;
+    notifyListeners();
+  }
+
+   /// Cierra la sesión del usuario actual
+  void logout() {
+    _currentUser = null;
+    _authStatus = AuthStatus.unauthenticated;
+    _authError = null;
+    _readingsToday = [];
+    _readingsMonth = [];
+    _readingsAll = [];
+    disconnect();
+    notifyListeners();
+  }
+
+  // Maneja los mensaje recibidos del servidor por auth
+  void _onAuthMessage(dynamic message) {
+    try {
+      final data = jsonDecode(message  as String) as Map<String, dynamic>;
+      if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
+        _pendingAuthRequest!.complete(data);
+      }
+    } catch (e) {
+      debugPrint('Error en mensaje de auth: $e');
+      if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
+        _pendingAuthRequest!.completeError(e);
+      }
+    }
+  }
+
   // Maneja los mensajes recibidos del servidor
   void _onMessage(dynamic message) {
     try {
-      final res = jsonDecode(message); // Parcialmente res es un tipo _JsonMap
+      final res = jsonDecode(message as String); // Parcialmente res es un tipo _JsonMap
       print('[_onMessage] Res Data: ${res['event']}');
       // El servidor envía una lista de lecturas
       if (res is Map<String, dynamic> && res['data'] is List<dynamic>) {
