@@ -1,5 +1,5 @@
-name: primera_sesion_flutter
-description: "A new Flutter project."
+name: gas_monitor
+description: "Dashboard de gas con el fin de monitorear en tiempo real el estado de la vivienda desde cualquir parte y momento."
 publish_to: 'none'
 version: 0.1.0+1
 

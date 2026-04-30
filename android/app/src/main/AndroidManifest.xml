@@ -1,15 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="true" />
+    <!-- Permiso de Red - Para conectarse al servidor. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
       Granular media permissions for Android 13 and newer.
       See https://developer.android.com/about/versions/13/behavior-changes-13#granular-media-permissions
       for more information.
     -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        android:maxSdkVersion="32" 
+    />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" 
+    />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" 
+    />
     
     <!-- Permissions options for the `camera` group -->
     <uses-permission android:name="android.permission.CAMERA"/>
@@ -17,8 +26,13 @@
     <!-- Permissions options for the `notification` group -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="true"
+    />
+
     <application
-        android:label="primera_sesion_flutter"
+        android:label="Gas Monitor"
         android:name="${Gas_Monitor}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -43,6 +57,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Necesario para image_picker: permite acceso al FileProvider -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -58,6 +82,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Compatibilidad con edge-to-edge en Android 15+ -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
         </intent>
     </queries>
 </manifest>

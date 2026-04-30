@@ -5,9 +5,9 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>es</string>
 	<key>CFBundleDisplayName</key>
-	<string>Primera Sesion Flutter</string>
+	<string>Gas Monitor</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>primera_sesion_flutter</string>
+	<string>gas_monitor</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -26,6 +26,17 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	
+	<!-- Cámara: requerido por image_picker al usar ImageSource.camera -->
+    <key>NSCameraUsageDescription</key>
+    <string>Gas Monitor necesita acceso a la cámara para que puedas tomar una foto de perfil.</string>
+	<!-- Galería (lectura): requerido por image_picker al usar ImageSource.gallery -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Gas Monitor necesita acceso a tus fotos para que puedas elegir una foto de perfil desde tu galería.</string>
+	<!-- Galería (escritura): para guardar imágenes capturadas -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Gas Monitor puede guardar fotos en tu galería cuando tomes una foto de perfil.</string>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
