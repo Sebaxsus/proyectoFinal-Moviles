@@ -1,12 +1,7 @@
-// lib/screens/general_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/websocket_service.dart';
-import '../models/sensor_reading.dart';
-import '../widgets/stat_card.dart';
-import '../widgets/sensor_chart.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 class GeneralScreen extends StatefulWidget {
   const GeneralScreen({super.key});
@@ -39,21 +34,6 @@ class _GeneralScreenState extends State<GeneralScreen> {
     }
   }
 
-  // Calcula cuántas lecturas están en cada nivel de peligro
-  Map<String, int> _getLevelDistribution(List<SensorReading> readings) {
-    int safe = 0, warning = 0, danger = 0;
-    for (final r in readings) {
-      if (r.valor < 40) {
-        safe++;
-      } else if (r.valor < 70) {
-        warning++;
-      } else {
-        danger++;
-      }
-    }
-    return {'Normal': safe, 'Advertencia': warning, 'Peligro': danger};
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = context.watch<WebSocketService>();
@@ -61,16 +41,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
 
     print('Lecturas Obtenidas en General: ${(readings.isEmpty) ? 'No ha completado la promesa' : readings.last.timestamp}\nError?: ${_error}');
 
-    double? maxVal, minVal, avgVal;
-    int totalReadings = readings.length;
-
-    if (readings.isNotEmpty) {
-      maxVal = readings.map((r) => r.valor).reduce((a, b) => a > b ? a : b);
-      minVal = readings.map((r) => r.valor).reduce((a, b) => a < b ? a : b);
-      avgVal = readings.map((r) => r.valor).reduce((a, b) => a + b) / readings.length;
-    }
-
-    final distribution = _getLevelDistribution(readings);
+    final stats = SensorStats.from(readings);
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -88,14 +59,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
             const SizedBox(height: 20),
 
             if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: AppTheme.accent),
-                ),
-              )
+              const LoadingBody(message: 'Cargando Historico...')
             else if (_error != null)
-              _buildErrorCard()
+              ErrorCard(message: _error, onRetry: _loadData)
             else ...[
               // Estadísticas generales
               GridView.count(
@@ -108,28 +74,28 @@ class _GeneralScreenState extends State<GeneralScreen> {
                 children: [
                   StatCard(
                     label: 'Total Histórico',
-                    value: totalReadings.toString(),
+                    value: stats.count.toString(),
                     unit: 'registros',
                     color: AppTheme.accent,
                     icon: Icons.dataset_outlined,
                   ),
                   StatCard(
                     label: 'Promedio Global',
-                    value: avgVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.avg?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.accent,
                     icon: Icons.show_chart,
                   ),
                   StatCard(
                     label: 'Pico Máximo',
-                    value: maxVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.max?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.danger,
                     icon: Icons.warning_amber_rounded,
                   ),
                   StatCard(
                     label: 'Mínimo Global',
-                    value: minVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.min?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.safe,
                     icon: Icons.check_circle_outline,
@@ -139,9 +105,10 @@ class _GeneralScreenState extends State<GeneralScreen> {
               const SizedBox(height: 20),
 
               // Distribución de niveles
-              if (readings.isNotEmpty)
-                _buildDistributionCard(context, distribution, totalReadings),
-              const SizedBox(height: 20),
+              if (stats.isNotEmpty) ...[
+                _LevelDistributionCard(stats: stats),
+                const SizedBox(height: 20),
+              ],
 
               // Gráfico histórico (muestra los últimos 100 registros para no sobrecargar)
               SensorChart(
@@ -151,16 +118,29 @@ class _GeneralScreenState extends State<GeneralScreen> {
               const SizedBox(height: 20),
 
               // Información del primer y último registro
-              if (readings.isNotEmpty) _buildFirstLastCard(context, readings),
+              if (stats.isNotEmpty) _RangeCard(stats: stats),
             ],
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildDistributionCard(
-      BuildContext context, Map<String, int> dist, int total) {
+class _LevelDistributionCard extends StatelessWidget {
+  final SensorStats stats;
+ 
+  const _LevelDistributionCard({required this.stats});
+ 
+  @override
+  Widget build(BuildContext context) {
+    final dist  = stats.levelDistribution;
+    final total = stats.count;
+ 
+    final normalCount  = dist[GasLevel.normal]  ?? 0;
+    final warningCount = dist[GasLevel.warning] ?? 0;
+    final dangerCount  = dist[GasLevel.danger]  ?? 0;
+ 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -173,66 +153,38 @@ class _GeneralScreenState extends State<GeneralScreen> {
             Text('Porcentaje de tiempo en cada nivel',
                 style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 16),
-
-            // Barra de distribución visual
+ 
+            // Barra proporcional
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Row(
                 children: [
-                  if (dist['Normal']! > 0)
+                  if (normalCount > 0)
                     Flexible(
-                      flex: dist['Normal']!,
-                      child: Container(
-                        height: 20,
-                        color: AppTheme.safe,
-                      ),
+                      flex: normalCount,
+                      child: Container(height: 20, color: AppTheme.safe),
                     ),
-                  if (dist['Advertencia']! > 0)
+                  if (warningCount > 0)
                     Flexible(
-                      flex: dist['Advertencia']!,
-                      child: Container(
-                        height: 20,
-                        color: AppTheme.warning,
-                      ),
+                      flex: warningCount,
+                      child: Container(height: 20, color: AppTheme.warning),
                     ),
-                  if (dist['Peligro']! > 0)
+                  if (dangerCount > 0)
                     Flexible(
-                      flex: dist['Peligro']!,
-                      child: Container(
-                        height: 20,
-                        color: AppTheme.danger,
-                      ),
+                      flex: dangerCount,
+                      child: Container(height: 20, color: AppTheme.danger),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-
-            // Leyenda
+ 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildLegendItem(
-                  context,
-                  'Normal',
-                  dist['Normal']!,
-                  total,
-                  AppTheme.safe,
-                ),
-                _buildLegendItem(
-                  context,
-                  'Advertencia',
-                  dist['Advertencia']!,
-                  total,
-                  AppTheme.warning,
-                ),
-                _buildLegendItem(
-                  context,
-                  'Peligro',
-                  dist['Peligro']!,
-                  total,
-                  AppTheme.danger,
-                ),
+                _LegendItem('Normal',      normalCount,  total, AppTheme.safe),
+                _LegendItem('Advertencia', warningCount, total, AppTheme.warning),
+                _LegendItem('Peligro',     dangerCount,  total, AppTheme.danger),
               ],
             ),
           ],
@@ -240,51 +192,64 @@ class _GeneralScreenState extends State<GeneralScreen> {
       ),
     );
   }
-
-  Widget _buildLegendItem(
-      BuildContext context, String label, int count, int total, Color color) {
+}
+ 
+class _LegendItem extends StatelessWidget {
+  final String label;
+  final int count;
+  final int total;
+  final Color color;
+ 
+  const _LegendItem(this.label, this.count, this.total, this.color);
+ 
+  @override
+  Widget build(BuildContext context) {
     final pct = total > 0 ? (count / total * 100).toStringAsFixed(1) : '0';
     return Column(
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              width: 10, height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 6),
             Text(label,
-                style: TextStyle(
+                style: const TextStyle(
                     color: AppTheme.textSecondary, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          '$pct%',
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        Text(
-          '$count lecturas',
-          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
-        ),
+        Text('$pct%',
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+        Text('$count lecturas',
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 10)),
       ],
     );
   }
-
-  Widget _buildFirstLastCard(
-      BuildContext context, List<SensorReading> readings) {
-    // Los datos vienen en DESC (más reciente primero)
-    final first = readings.last;   // el más antiguo
-    final last = readings.first;   // el más reciente
-
-    String formatDate(DateTime dt) =>
-        '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-
+}
+ 
+class _RangeCard extends StatelessWidget {
+  final SensorStats stats;
+ 
+  const _RangeCard({required this.stats});
+ 
+  String _fmt(DateTime dt) =>
+      '${dt.day.toString().padLeft(2,'0')}/'
+      '${dt.month.toString().padLeft(2,'0')}/'
+      '${dt.year}  '
+      '${dt.hour.toString().padLeft(2,'0')}:'
+      '${dt.minute.toString().padLeft(2,'0')}';
+ 
+  @override
+  Widget build(BuildContext context) {
+    // readings vienen en DESC → first es el más reciente, last el más antiguo
+    final oldest = stats.readings.last;
+    final newest = stats.readings.first;
+ 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -296,53 +261,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('PRIMER REGISTRO',
-                          style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 10,
-                              letterSpacing: 1)),
-                      const SizedBox(height: 4),
-                      Text(formatDate(first.timestamp),
-                          style: const TextStyle(
-                              color: AppTheme.textPrimary, fontSize: 13)),
-                      Text('${first.valor.toStringAsFixed(2)} ppm',
-                          style: const TextStyle(
-                              color: AppTheme.accent,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
+                Expanded(child: _RangeColumn(
+                  label: 'PRIMER REGISTRO',
+                  date: _fmt(oldest.timestamp),
+                  value: oldest.valor,
+                )),
                 Container(
-                  width: 1,
-                  height: 50,
+                  width: 1, height: 50,
                   color: AppTheme.textSecondary.withOpacity(0.3),
                 ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('ÚLTIMO REGISTRO',
-                            style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 10,
-                                letterSpacing: 1)),
-                        const SizedBox(height: 4),
-                        Text(formatDate(last.timestamp),
-                            style: const TextStyle(
-                                color: AppTheme.textPrimary, fontSize: 13)),
-                        Text('${last.valor.toStringAsFixed(2)} ppm',
-                            style: const TextStyle(
-                                color: AppTheme.accent,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold)),
-                      ],
+                    child: _RangeColumn(
+                      label: 'ÚLTIMO REGISTRO',
+                      date: _fmt(newest.timestamp),
+                      value: newest.valor,
                     ),
                   ),
                 ),
@@ -353,30 +287,36 @@ class _GeneralScreenState extends State<GeneralScreen> {
       ),
     );
   }
-
-  Widget _buildErrorCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const Icon(Icons.wifi_off, color: AppTheme.danger, size: 48),
-            const SizedBox(height: 12),
-            const Text('No se pudo obtener datos',
-                style: TextStyle(color: AppTheme.textPrimary)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _loadData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accent,
-                foregroundColor: AppTheme.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
+}
+ 
+class _RangeColumn extends StatelessWidget {
+  final String label;
+  final String date;
+  final double value;
+ 
+  const _RangeColumn({
+    required this.label,
+    required this.date,
+    required this.value,
+  });
+ 
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 10, letterSpacing: 1)),
+        const SizedBox(height: 4),
+        Text(date,
+            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12)),
+        Text('${value.toStringAsFixed(2)} ppm',
+            style: const TextStyle(
+                color: AppTheme.accent,
+                fontSize: 16,
+                fontWeight: FontWeight.bold)),
+      ],
     );
   }
 }

@@ -1,7 +1,6 @@
-// lib/widgets/stat_card.dart
-
 import 'package:flutter/material.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 // Tarjeta que muestra una estadística individual (máximo, mínimo, promedio, etc.)
 class StatCard extends StatelessWidget {

@@ -1,9 +1,7 @@
-// lib/widgets/sensor_chart.dart
-
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../models/sensor_reading.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 class SensorChart extends StatelessWidget {
   final List<SensorReading> readings;

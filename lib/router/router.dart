@@ -6,15 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../models/auth_state.dart';
-import '../services/websocket_service.dart';
-import '../screens/auth_screen.dart';
-import '../screens/today_screen.dart';
-import '../screens/month_screen.dart';
-import '../screens/general_screen.dart';
-import '../screens/safety_screen.dart';
-import '../screens/profile_screen.dart';
-import '../widgets/main_shell.dart';
+import 'package:gas_monitor/gas_monitor.dart';
 
 // ----------------------------------------------------------------
 // NOMBRES DE RUTA — constantes para evitar typos al navegar

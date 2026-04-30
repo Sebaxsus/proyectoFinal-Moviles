@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/auth_state.dart';
-import '../services/websocket_service.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 /// Pantalla de autenticación con dos modos: Login y Registro.
 /// Se muestra cuando [AuthStatus] es [unauthenticated] o [error].

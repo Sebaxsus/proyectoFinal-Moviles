@@ -1,13 +1,9 @@
-// lib/services/websocket_service.dart
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../models/sensor_reading.dart';
-import '../models/user_model.dart';
-import '../models/auth_state.dart';
+import 'package:gas_monitor/gas_monitor.dart';
 
 class WebSocketService extends ChangeNotifier {
   static const String _serverUrl = 'ws://127.0.0.1:5000';
@@ -19,6 +15,7 @@ class WebSocketService extends ChangeNotifier {
   WebSocketChannel? _authChannel;
 
   bool _isConnected = false;
+  bool _isAuthConnected = false;
   String _statusMessage = 'Desconectado';
 
   // --- Estado de Auth
@@ -47,6 +44,46 @@ class WebSocketService extends ChangeNotifier {
   UserModel? get currentUser => _currentUser;
   String? get authError => _authError;
   bool get isAuthenticated => _authStatus == AuthStatus.authenticated;
+
+  Future<void> connectAuth() async {
+
+    if (_isAuthConnected) return;
+
+    _authStatus = AuthStatus.loading;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      _authChannel ??= WebSocketChannel.connect(Uri.parse(_authUrl), protocols: ["arduino", "None"]);
+
+      // Escuchar la respuesta de Auth
+      _authChannel!.stream.listen(
+        _onAuthMessage,
+        onError: (e) {
+          if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
+            _pendingAuthRequest!.completeError(e);
+          }
+        },
+        onDone: () {
+          print("¡El WebSocket se ha CERRADO!");
+          _isAuthConnected = false;
+          _authChannel = null;
+          // _authStatus = AuthStatus.error;
+          // notifyListeners();
+        },
+        cancelOnError: false,
+
+      );
+
+      await _authChannel!.ready;
+
+      _isAuthConnected = true;
+    } catch (e) {
+      _authStatus = AuthStatus.error;
+      _authError = e.toString();
+      _isAuthConnected = false;
+    }
+  }
 
   // Conectar al servidor WebSocket
   Future<void> connect() async {
@@ -83,35 +120,37 @@ class WebSocketService extends ChangeNotifier {
     _channel?.sink.close();
     _authChannel?.sink.close();
 
+    _authChannel = null;
+
+    _isAuthConnected = false;
     _isConnected = false;
+
+    _pendingAuthRequest = null;
+    
     _statusMessage = 'Desconectado';
     notifyListeners();
   }
 
+  void disconnectAuth() {
+    _authChannel?.sink.close();
+    _isAuthConnected = false;
+  }
   // Inicia sesión enviando credenciales al endpoint ws://.../auth
   /// El servidor debe responder con:
   ///   {"event":"login","status":"ok","username":"...","token":"..."}
   ///   {"event":"login","status":"error","message":"..."}
   Future<void> login(String username, String password) async {
-    _authStatus = AuthStatus.loading;
-    _authError = null;
-    notifyListeners();
-
+    print("entro a Login");
     try {
-      _authChannel ??= WebSocketChannel.connect(Uri.parse(_authUrl));
-      _pendingAuthRequest = Completer<Map<String, dynamic>>();
+      if (!_isAuthConnected || _authChannel == null) {
+        await connectAuth();
+      }
 
-      // Escuchar la respuesta de Auth
-      _authChannel!.stream.listen(
-        _onAuthMessage,
-        onError: (e) {
-          if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
-            _pendingAuthRequest!.completeError(e);
-          }
-        },
-      );
+      _pendingAuthRequest = Completer<Map<String, dynamic>>();
+      print("Completer creado login: ${_pendingAuthRequest.hashCode}");
 
       // Enviar Credenciales
+      print("Enviando al server el login");
       _authChannel!.sink.add(
         jsonEncode(
           {
@@ -129,6 +168,7 @@ class WebSocketService extends ChangeNotifier {
       );
 
       if (response['status'] == 'ok') {
+        print('Respuesta Ok Login');
         _currentUser = UserModel.fromJson(response);
         _authStatus = AuthStatus.authenticated;
         _authError = null;
@@ -145,6 +185,7 @@ class WebSocketService extends ChangeNotifier {
       _authError = e.toString();
     }
 
+    print('Llego al final de login');
     _pendingAuthRequest = null;
     notifyListeners();
 
@@ -153,32 +194,26 @@ class WebSocketService extends ChangeNotifier {
   /// Registra un nuevo usuario enviando credenciales al endpoint /auth
   /// {"event":"register","username":"...","password":"..."}
   Future<void> register(String username, String password) async {
-    _authStatus = AuthStatus.loading;
-    _authError = null;
-    notifyListeners();
+    print('Estado de conexion: $_isAuthConnected, authChannel: $_authChannel');
+    if (!_isAuthConnected || _authChannel == null) {
+        await connectAuth();
+      }
 
     try {
-      _authChannel ??= WebSocketChannel.connect(Uri.parse(_authUrl));
       _pendingAuthRequest = Completer<Map<String, dynamic>>();
+      print("Completer creado register: ${_pendingAuthRequest.hashCode}");
 
-      _authChannel!.stream.listen(
-        _onAuthMessage,
-        onError: (e) {
-          if (_pendingAuthRequest != null && _pendingAuthRequest!.isCompleted) {
-            _pendingAuthRequest!.completeError(e);
-          }
-        },
-      );
-
-      _authChannel!.sink.add(
-        jsonEncode(
-          {
-            'event': 'register',
-            'username': username,
-            'password': password,
-          }
-        )
-      );
+      Future.microtask( () {
+        _authChannel!.sink.add(
+          jsonEncode(
+            {
+              'event': 'register',
+              'username': username,
+              'password': password,
+            }
+          )
+        );
+      });
 
       final response = await _pendingAuthRequest!.future.timeout(
         const Duration(seconds: 10),
@@ -186,9 +221,11 @@ class WebSocketService extends ChangeNotifier {
       );
 
       if (response['status'] == 'ok') {
+        print('Respuesta Register OK, Pasando a login.');
         await login(username, password);
         return;
       } else {
+        print('Respuesta Register ERROR, Obejto res $response');
         _authStatus = AuthStatus.error;
         _authError = response['message'] as String? ?? 'Error al registrar usuario';
       }
@@ -215,10 +252,12 @@ class WebSocketService extends ChangeNotifier {
 
   // Maneja los mensaje recibidos del servidor por auth
   void _onAuthMessage(dynamic message) {
+    print("Mensaje recibido en el socket: $message");
     try {
       final data = jsonDecode(message  as String) as Map<String, dynamic>;
       if (_pendingAuthRequest != null && !_pendingAuthRequest!.isCompleted) {
         _pendingAuthRequest!.complete(data);
+        print("Completer Completando: ${_pendingAuthRequest.hashCode}");
       }
     } catch (e) {
       debugPrint('Error en mensaje de auth: $e');

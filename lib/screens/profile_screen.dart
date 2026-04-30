@@ -2,9 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../services/permisions_service.dart';
-import '../services/websocket_service.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 /// Pantalla de perfil del usuario autenticado.
 /// Permite tomar foto con la cámara o elegir desde la galería.

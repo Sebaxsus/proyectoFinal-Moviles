@@ -1,13 +1,8 @@
-// lib/screens/month_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../services/websocket_service.dart';
-import '../models/sensor_reading.dart';
-import '../widgets/stat_card.dart';
-import '../widgets/sensor_chart.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart'; // BARREL FILE
 
 class MonthScreen extends StatefulWidget {
   const MonthScreen({super.key});
@@ -26,6 +21,11 @@ class _MonthScreenState extends State<MonthScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
+  static const _months = [
+    '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -40,36 +40,13 @@ class _MonthScreenState extends State<MonthScreen> {
     }
   }
 
-  // Agrupa las lecturas por día y calcula el promedio diario
-  Map<int, double> _getDailyAverages(List<SensorReading> readings) {
-    final Map<int, List<double>> byDay = {};
-    for (final r in readings) {
-      byDay.putIfAbsent(r.timestamp.day, () => []).add(r.valor);
-    }
-    return byDay.map((day, values) =>
-        MapEntry(day, values.reduce((a, b) => a + b) / values.length));
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = context.watch<WebSocketService>();
     final readings = service.readingsMonth;
 
-    double? maxVal, minVal, avgVal;
-    int totalReadings = readings.length;
-
-    if (readings.isNotEmpty) {
-      maxVal = readings.map((r) => r.valor).reduce((a, b) => a > b ? a : b);
-      minVal = readings.map((r) => r.valor).reduce((a, b) => a < b ? a : b);
-      avgVal = readings.map((r) => r.valor).reduce((a, b) => a + b) /
-          readings.length;
-    }
-
+    final stats = SensorStats.from(readings);
     final now = DateTime.now();
-    final months = [
-      '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -83,19 +60,14 @@ class _MonthScreenState extends State<MonthScreen> {
             // Encabezado
             Text('Resumen del Mes',
                 style: Theme.of(context).textTheme.headlineMedium),
-            Text('${months[now.month]} ${now.year}',
+            Text('${_months[now.month]} ${now.year}',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 20),
 
             if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: AppTheme.accent),
-                ),
-              )
+              const LoadingBody(message: 'Cargando lecturas del mes...')
             else if (_error != null)
-              _buildErrorCard()
+              ErrorCard(message: _error, onRetry: _loadData)
             else ...[
               // Estadísticas del mes en grid
               GridView.count(
@@ -108,28 +80,28 @@ class _MonthScreenState extends State<MonthScreen> {
                 children: [
                   StatCard(
                     label: 'Total de Registros',
-                    value: totalReadings.toString(),
+                    value: stats.count.toString(),
                     unit: 'lecturas',
                     color: AppTheme.accent,
                     icon: Icons.storage_outlined,
                   ),
                   StatCard(
                     label: 'Promedio Mensual',
-                    value: avgVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.avg?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.accent,
                     icon: Icons.analytics_outlined,
                   ),
                   StatCard(
                     label: 'Máximo Registrado',
-                    value: maxVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.max?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.danger,
                     icon: Icons.trending_up_rounded,
                   ),
                   StatCard(
                     label: 'Mínimo Registrado',
-                    value: minVal?.toStringAsFixed(2) ?? '--',
+                    value: stats.min?.toStringAsFixed(2) ?? '--',
                     unit: 'ppm',
                     color: AppTheme.safe,
                     icon: Icons.trending_down_rounded,
@@ -139,7 +111,7 @@ class _MonthScreenState extends State<MonthScreen> {
               const SizedBox(height: 20),
 
               // Gráfico de barras: promedio por día
-              if (readings.isNotEmpty) _buildDailyBarChart(context, readings),
+              if (stats.isNotEmpty) _DailyBarChart(dailyAverages: stats.dailyAverages),
               const SizedBox(height: 20),
 
               // Gráfico de línea completo del mes
@@ -154,13 +126,19 @@ class _MonthScreenState extends State<MonthScreen> {
     );
   }
 
-  Widget _buildDailyBarChart(BuildContext context, List<SensorReading> readings) {
-    final dailyAverages = _getDailyAverages(readings);
+}
+
+class _DailyBarChart extends StatelessWidget {
+  final Map<int, double> dailyAverages;
+ 
+  const _DailyBarChart({required this.dailyAverages});
+ 
+  @override
+  Widget build(BuildContext context) {
     if (dailyAverages.isEmpty) return const SizedBox();
-
+ 
     final sortedDays = dailyAverages.keys.toList()..sort();
-    final maxAvg = dailyAverages.values.reduce((a, b) => a > b ? a : b);
-
+ 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -182,8 +160,8 @@ class _MonthScreenState extends State<MonthScreen> {
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: AppTheme.accent.withOpacity(0.1),
+                    getDrawingHorizontalLine: (_) => const FlLine(
+                      color: Color(0x1A00D4AA),
                       strokeWidth: 1,
                     ),
                   ),
@@ -197,36 +175,32 @@ class _MonthScreenState extends State<MonthScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final day = sortedDays[value.toInt()];
+                        getTitlesWidget: (value, _) {
+                          final idx = value.toInt();
+                          if (idx < 0 || idx >= sortedDays.length) {
+                            return const SizedBox();
+                          }
                           return Text(
-                            day.toString(),
+                            sortedDays[idx].toString(),
                             style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 9,
-                            ),
+                                color: AppTheme.textSecondary, fontSize: 9),
                           );
                         },
                       ),
                     ),
                   ),
-                  barGroups: sortedDays.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final day = entry.value;
-                    final avg = dailyAverages[day]!;
+                  barGroups: sortedDays.asMap().entries.map((e) {
+                    final avg   = dailyAverages[e.value]!;
                     final color = AppTheme.getLevelColor(avg, 100);
-
                     return BarChartGroupData(
-                      x: index,
+                      x: e.key,
                       barRods: [
                         BarChartRodData(
                           toY: avg,
                           color: color,
                           width: 8,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(4),
-                            topRight: Radius.circular(4),
-                          ),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4)),
                         ),
                       ],
                     );
@@ -234,45 +208,17 @@ class _MonthScreenState extends State<MonthScreen> {
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
                       getTooltipColor: (_) => AppTheme.surface,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      getTooltipItem: (group, groupIndex, rod, _) {
                         final day = sortedDays[groupIndex];
                         return BarTooltipItem(
                           'Día $day\n${rod.toY.toStringAsFixed(2)} ppm',
                           const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 12,
-                          ),
+                              color: AppTheme.textPrimary, fontSize: 12),
                         );
                       },
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const Icon(Icons.wifi_off, color: AppTheme.danger, size: 48),
-            const SizedBox(height: 12),
-            const Text('No se pudo obtener datos',
-                style: TextStyle(color: AppTheme.textPrimary)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _loadData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accent,
-                foregroundColor: AppTheme.primary,
               ),
             ),
           ],

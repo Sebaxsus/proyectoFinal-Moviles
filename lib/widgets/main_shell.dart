@@ -1,5 +1,3 @@
-// lib/widgets/main_shell.dart
-//
 // MAIN SHELL — scaffold compartido del dashboard
 //
 // Este widget envuelve todas las pantallas internas (Today, Month,
@@ -18,9 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../router/router.dart';
-import '../services/websocket_service.dart';
-import '../utils/app_theme.dart';
+import 'package:gas_monitor/gas_monitor.dart';
 
 class MainShell extends StatelessWidget {
   /// [child] es la pantalla activa inyectada por go_router (ShellRoute).

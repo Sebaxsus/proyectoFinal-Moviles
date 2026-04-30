@@ -1,9 +1,7 @@
-// lib/screens/safety_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/websocket_service.dart';
-import '../utils/app_theme.dart';
+
+import 'package:gas_monitor/gas_monitor.dart';
 
 // Modelo simple para una recomendación de seguridad
 class SafetyTip {
